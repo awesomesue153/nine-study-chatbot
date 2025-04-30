@@ -1,16 +1,17 @@
-import os
+import os, streamlit as st
 from huggingface_hub import login
 from langchain_huggingface import HuggingFaceEmbeddings
 
 hf_token = os.getenv("HF_TOKEN")
 if hf_token:
-    login(hf_token)
+    login(hf_token)                                   # 토큰 로그인
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token # ★ env 변수에 주입
 
-# ★ 여기서 모델·토큰 모두 명시
+# ⬇︎ 키워드 인자 제거
 emb = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2",   # ← 더 작은 버전
-    huggingfacehub_api_token=hf_token
+    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
+
 
 import os, json
 import streamlit as st
