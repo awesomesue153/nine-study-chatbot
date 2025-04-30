@@ -1,40 +1,39 @@
-import os, csv, json, streamlit as st, pandas as pd
+import streamlit as st, json, pandas as pd
 from serpapi import GoogleSearch
 from transformers import pipeline
 from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import ConversationalRetrievalChain
 from langchain_community.vectorstores import FAISS
-from huggingface_hub import login
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# ── 0) 토큰 로그인 & ENV 주입 ─────────────────────────────
-hf_token = os.getenv("HF_TOKEN")
-if hf_token:
-    login(hf_token)
-    os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token   # ★ ENV 로 전달
 
 # — 0) 설정 로드 —
-with open("config.json")     as f: menu_cfg = json.load(f)
-with open("publishers.json") as f: pub_cfg  = json.load(f)
+with open("config.json", "r", encoding="utf-8") as f:
+    menu_cfg = json.load(f)
+with open("publishers.json", "r", encoding="utf-8") as f:
+    pub_cfg = json.load(f)
 
-# — 1) CSV → content 사전 —
+# — 1) CSV → content 사전 생성 —
+
+# 1-1) 간단 파일 로드
 concepts_df = pd.read_csv("concepts.csv")
 problems_df = pd.read_csv("problems.csv")
 self_df     = pd.read_csv("self_check.csv")
 
-# 👉 robust load for exam_tips.csv
+# 1-2) exam_tips.csv 수동 파싱
 tips = []
 with open("exam_tips.csv", newline="", encoding="utf-8") as f:
-    rdr = csv.reader(f)
-    next(rdr, None)                 # 헤더 건너뛰기
-    for row in rdr:
+    reader = csv.reader(f)
+    next(reader)  # 헤더( unit_id, tip ) 건너뛰기
+    for row in reader:
         if not row:
             continue
-        unit_id = row[0]
-        tip     = ",".join(row[1:]).strip()   # 쉼표 포함 부분 결합
-        tips.append({"unit_id": unit_id, "tip": tip})
+        unit_id  = row[0]
+        tip_text = ",".join(row[1:])
+        tips.append({"unit_id": unit_id, "tip": tip_text})
 tips_df = pd.DataFrame(tips)
 
+# 1-3) content 딕셔너리 조합
 content = {}
 for uid, grp in concepts_df.groupby("unit_id"):
     content[uid] = {"concept": grp["concept"].iloc[0]}
@@ -45,65 +44,71 @@ for uid, grp in self_df.groupby("unit_id"):
 for uid, grp in tips_df.groupby("unit_id"):
     content.setdefault(uid, {})["exam_tips"] = grp["tip"].tolist()
 
-# — 2) SerpAPI 설정 —
+# — 2) SerpAPI (웹 검색) 설정 —
 API_KEY = "YOUR_SERPAPI_API_KEY"
 def web_search(query):
     return GoogleSearch({"engine":"google","q":query,"api_key":API_KEY}) \
-    .get_dict().get("organic_results",[])
+           .get_dict().get("organic_results", [])
 
 # — 3) RAG 체인 초기화 —
-#   이미 생성된 rag_index 폴더 필요
-emb = HuggingFaceEmbeddings(                       # ★ 인자 1개만 남김
-    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
-)
+# (사전에 D 단계에서 rag_index 폴더 생성 필요)
+emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+# 수정: 위험 역직렬화 허용
 rag_store = FAISS.load_local(
-    "rag_index", 
+    "rag_index",
     emb,
-    allow_dangerous_deserialization=True   # ★ 추가
-    )
-gen_pipe = pipeline("text-generation", model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                    tokenizer="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                    max_new_tokens=128, temperature=0.7)
+    allow_dangerous_deserialization=True
+)
+
+# TinyLlama 모델 파이프라인 래핑
+gen_pipe = pipeline(
+    "text-generation",
+    model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    tokenizer="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    max_new_tokens=128,
+    temperature=0.7
+)
 llm_rag = HuggingFacePipeline(pipeline=gen_pipe)
+
 rag_chain = ConversationalRetrievalChain.from_llm(
     llm=llm_rag,
     retriever=rag_store.as_retriever(search_kwargs={"k":3})
 )
 
-# — 4) UI 시작 —
+# — 4) Streamlit UI 시작 —
 st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
 st.title("🧑‍🎓 나인스터디 챗봇")
 st.write("나인이에게 ‘스터디위드미? 스윗미!’ 해 보세요 😊")
 
 mode = st.radio("원하시는 서비스를 선택하세요",
                 ["레벨테스트 받기","학습 및 질문하기"])
-if mode=="레벨테스트 받기":
+if mode == "레벨테스트 받기":
     st.info("레벨테스트 기능은 준비 중입니다.")
     st.stop()
 
-# — 5) 학습 및 질문하기 분기 —
-path=["학습 및 질문하기"]
-def step(opts,label):
+# — 5) 학습 및 질문하기 분기 로직 —
+path = ["학습 및 질문하기"]
+def step(opts, label):
     choice = st.selectbox(label, list(opts.keys()))
     path.append(choice)
     return opts[choice]
 
 opts1 = menu_cfg["학습 및 질문하기"]
-opts2 = step(opts1, "대상 선택")
-opts3 = step(opts2, "세부 선택")
+opts2 = step(opts1, "대상 선택")      # 중학교·고등학교·…
+opts3 = step(opts2, "세부 선택")      # 중1·중2·… or 전형
 if isinstance(opts3, dict) and "분류" in opts3:
     cat = st.selectbox("분류 선택", opts3["분류"])
     path.append(cat)
-    pubs   = pub_cfg[path[-2]][cat]
-    pub    = st.selectbox("교재 선택", list(pubs.keys()))
+    pubs = pub_cfg[path[-2]][cat]
+    pub = st.selectbox("교재 선택", list(pubs.keys()))
     path.append(pub)
-    unit   = st.selectbox("과 선택", pubs[pub])
+    unit = st.selectbox("과 선택", pubs[pub])
     path.append(unit)
 else:
     unit = path[-1]
 
 # — 6) 콘텐츠 화면 & 하이브리드 QA —
-uid  = unit.replace(" ","_")
+uid = unit.replace(" ", "_")
 data = content.get(uid, {})
 
 st.header(f"🔖 {unit}")
@@ -111,14 +116,14 @@ st.write("---")
 
 # 6-1) 개념 설명 + 하이브리드 질문
 if st.button("1️⃣ 개념을 자세히 설명해줘요"):
-    st.markdown(data.get("concept","준비 중입니다."))
+    st.markdown(data.get("concept", "준비 중입니다."))
     st.write("---")
     st.write("❓ 질문 유형을 선택하세요:")
-    mode2 = st.radio("", ["교재 범위 질문","심화 질문(웹 검색)"], horizontal=True)
+    mode2 = st.radio("", ["교재 범위 질문", "심화 질문(웹 검색)"], horizontal=True)
     q = st.text_input("질문 입력", key="hybrid_q")
     if q:
-        if mode2=="교재 범위 질문":
-            res = rag_chain({"question":q, "chat_history":[]})
+        if mode2 == "교재 범위 질문":
+            res = rag_chain({"question": q, "chat_history": []})
             st.markdown(res["answer"])
         else:
             results = web_search(q)[:3]
@@ -131,18 +136,18 @@ if st.button("2️⃣ 해당 단원 문제를 풀고 싶어요"):
     for p in data.get("problems", []):
         ans = st.radio(p["question"], eval(p["choices"]), key=p["q_id"])
         if st.button("제출", key=p["q_id"]):
-            st.success("✔ 정답!" if ans==p["answer"] else "❌ 오답!")
+            st.success("✔ 정답!" if ans == p["answer"] else "❌ 오답!")
     st.write("---")
 
 # 6-3) 내 실력 체크하기
 if st.button("3️⃣ 내 실력을 체크하고 싶어요"):
     for sc in data.get("self_check", []):
         resp = st.text_input(sc["question"], key=sc["question"])
-        if st.button("확인", key=sc["question"]+"_chk"):
+        if st.button("확인", key=sc["question"] + "_chk"):
             st.write("정답:", sc["answer"])
     st.write("---")
 
-# 6-4) 시험에 나올 포인트
+# 6-4) 시험 포인트
 if st.button("4️⃣ 시험에 나올 포인트 알려줘요"):
     for tip in data.get("exam_tips", []):
         st.write("•", tip)
