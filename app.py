@@ -56,7 +56,11 @@ def web_search(query):
 emb = HuggingFaceEmbeddings(                       # ★ 인자 1개만 남김
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
 )
-rag_store = FAISS.load_local("rag_index", emb)
+rag_store = FAISS.load_local(
+    "rag_index", 
+    emb,
+    allow_dangerous_deserialization=True   # ★ 추가
+    )
 gen_pipe = pipeline("text-generation", model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
                     tokenizer="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
                     max_new_tokens=128, temperature=0.7)
