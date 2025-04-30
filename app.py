@@ -16,23 +16,34 @@ with open("publishers.json", "r", encoding="utf-8") as f:
 
 # — 1) CSV → content 사전 생성 —
 
-# 1-1) 간단 파일 로드
+# (1) concepts, problems, self_check는 기존대로
 concepts_df = pd.read_csv("concepts.csv")
 problems_df = pd.read_csv("problems.csv")
 self_df     = pd.read_csv("self_check.csv")
 
-# 1-2) exam_tips.csv 수동 파싱
+# (2) exam_tips.csv 수동 로드
 tips = []
 with open("exam_tips.csv", newline="", encoding="utf-8") as f:
     reader = csv.reader(f)
-    next(reader)  # 헤더( unit_id, tip ) 건너뛰기
+    next(reader)  # 헤더 건너뛰기
     for row in reader:
-        if not row:
-            continue
         unit_id  = row[0]
         tip_text = ",".join(row[1:])
         tips.append({"unit_id": unit_id, "tip": tip_text})
 tips_df = pd.DataFrame(tips)
+
+# (3) content 사전 초기화
+content = {}
+for uid, grp in concepts_df.groupby("unit_id"):
+    content[uid] = {"concept": grp["concept"].iloc[0]}
+for uid, grp in problems_df.groupby("unit_id"):
+    content.setdefault(uid, {})["problems"] = grp.to_dict(orient="records")
+for uid, grp in self_df.groupby("unit_id"):
+    content.setdefault(uid, {})["self_check"] = grp.to_dict(orient="records")
+for uid, grp in tips_df.groupby("unit_id"):
+    content.setdefault(uid, {})["exam_tips"] = grp["tip"].tolist()
+
+print("✅ content dict 생성 완료:", len(content), "개 단원")
 
 # 1-3) content 딕셔너리 조합
 content = {}
@@ -52,14 +63,15 @@ def web_search(query):
            .get_dict().get("organic_results", [])
 
 # — 3) RAG 체인 초기화 —
-# (사전에 D 단계에서 rag_index 폴더 생성 필요)
+# chunks.csv 로드
+chunks_df = pd.read_csv("chunks.csv")  # columns: chunk, source
+
+# 임베딩 + FAISS 인덱스 생성
 emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-# 수정: 위험 역직렬화 허용
-rag_store = FAISS.load_local(
-    "rag_index",
-    emb,
-    allow_dangerous_deserialization=True
-)
+rag_store = FAISS.from_texts(chunks_df["chunk"].tolist(), emb)
+rag_store.save_local("rag_index")
+
+print("✅ RAG 인덱스 생성 완료")
 
 # TinyLlama 모델 파이프라인 래핑
 gen_pipe = pipeline(
