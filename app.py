@@ -15,7 +15,7 @@ emb = HuggingFaceEmbeddings(
 
 import os, json
 import streamlit as st
-import pandas as pd
+import csv, pandas as pd
 from huggingface_hub import login
 from serpapi import GoogleSearch
 from transformers import pipeline
@@ -39,7 +39,19 @@ with open("publishers.json", encoding="utf-8") as f:
 concepts_df = pd.read_csv("concepts.csv")
 problems_df = pd.read_csv("problems.csv")
 self_df     = pd.read_csv("self_check.csv")
-tips_df     = pd.read_csv("exam_tips.csv")
+
+# 🔸 exam_tips.csv (unit_id, tip) 는 쉼표가 섞여 있어 수동 파싱
+tips = []
+with open("exam_tips.csv", newline="", encoding="utf-8") as f:
+    reader = csv.reader(f)
+    next(reader, None)        # 헤더 건너뛰기 (없으면 자동 무시)
+    for row in reader:
+        if not row:
+            continue
+        unit_id  = row[0]
+        tip_text = ",".join(row[1:])     # 쉼표 갯수 상관없이 뒤를 전부 결합
+        tips.append({"unit_id": unit_id, "tip": tip_text})
+tips_df = pd.DataFrame(tips)
 
 content = {}
 for uid, grp in concepts_df.groupby("unit_id"):
