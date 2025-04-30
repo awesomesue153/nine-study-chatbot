@@ -1,10 +1,17 @@
-import streamlit as st, json, pandas as pd
+import os, csv, json, streamlit as st, pandas as pd
 from serpapi import GoogleSearch
 from transformers import pipeline
 from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import ConversationalRetrievalChain
 from langchain_community.vectorstores import FAISS
+from huggingface_hub import login
 from langchain_huggingface import HuggingFaceEmbeddings
+
+# ── 0) 토큰 로그인 & ENV 주입 ─────────────────────────────
+hf_token = os.getenv("HF_TOKEN")
+if hf_token:
+    login(hf_token)
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token   # ★ ENV 로 전달
 
 # — 0) 설정 로드 —
 with open("config.json")     as f: menu_cfg = json.load(f)
@@ -14,7 +21,19 @@ with open("publishers.json") as f: pub_cfg  = json.load(f)
 concepts_df = pd.read_csv("concepts.csv")
 problems_df = pd.read_csv("problems.csv")
 self_df     = pd.read_csv("self_check.csv")
-tips_df     = pd.read_csv("exam_tips.csv")
+
+# 👉 robust load for exam_tips.csv
+tips = []
+with open("exam_tips.csv", newline="", encoding="utf-8") as f:
+    rdr = csv.reader(f)
+    next(rdr, None)                 # 헤더 건너뛰기
+    for row in rdr:
+        if not row:
+            continue
+        unit_id = row[0]
+        tip     = ",".join(row[1:]).strip()   # 쉼표 포함 부분 결합
+        tips.append({"unit_id": unit_id, "tip": tip})
+tips_df = pd.DataFrame(tips)
 
 content = {}
 for uid, grp in concepts_df.groupby("unit_id"):
@@ -34,7 +53,9 @@ def web_search(query):
 
 # — 3) RAG 체인 초기화 —
 #   이미 생성된 rag_index 폴더 필요
-emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+emb = HuggingFaceEmbeddings(                       # ★ 인자 1개만 남김
+    model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
+)
 rag_store = FAISS.load_local("rag_index", emb)
 gen_pipe = pipeline("text-generation", model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
                     tokenizer="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
