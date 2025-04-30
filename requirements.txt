@@ -1,0 +1,11 @@
+streamlit==1.37.0
+pandas
+google-search-results
+transformers==4.50.0
+sentence_transformers==2.7.0
+langchain-core
+langchain-community
+langchain-huggingface
+faiss-cpu
+huggingface_hub>=0.23.0
+sentence_transformers>=2.7.0
