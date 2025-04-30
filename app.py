@@ -5,8 +5,6 @@ from langchain_huggingface import HuggingFaceEmbeddings
 hf_token = os.getenv("HF_TOKEN")
 if hf_token:
     login(hf_token)                                   # 토큰 로그인
-    os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_token # ★ env 변수에 주입
-
 # ⬇︎ 키워드 인자 제거
 emb = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-MiniLM-L3-v2"
