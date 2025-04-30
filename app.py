@@ -1,4 +1,5 @@
 import streamlit as st, json, pandas as pd
+import csv                      # ★ 누락된 csv 모듈 추가
 from serpapi import GoogleSearch
 from transformers import pipeline
 from langchain_community.llms import HuggingFacePipeline
