@@ -1,171 +1,304 @@
-import streamlit as st, json, pandas as pd
-import csv                      # ★ 누락된 csv 모듈 추가
-from serpapi import GoogleSearch
-from transformers import pipeline
-from langchain_community.llms import HuggingFacePipeline
-from langchain.chains import ConversationalRetrievalChain
+###############################################################################
+#  나인스터디 챗봇 v0.3.5  –  RAG + Web 하이브리드  (모바일 친화 레이아웃)
+#  · 캐싱 : CSV / FAISS / LLM            · DEV↔PROD 스위치  (USE_SMALL_LLM)
+#  · UI   : Stage 머신 (0 서비스→1 네비→2 학습) + 상단 고정 홈버튼 + 토스트 안내
+###############################################################################
+import os, json, csv, logging
+from pathlib import Path
+import streamlit as st
+import pandas as pd
+
+logging.basicConfig(level=logging.WARN)
+
+# ────────────────────────────── utils
+def parse_choices(raw: str) -> list[str]:
+    raw = raw.strip()
+
+    # ① JSON 표준 (더블쿼트) → 바로 리턴
+    try:
+        v = json.loads(raw)
+        if isinstance(v, list):
+            return v
+    except Exception:
+        pass
+
+    # ② 대괄호 감싸기 제거  […],  ['a','b']
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+
+    # ③ 쉼표 분리 후, 남은 따옴표 / 공백 제거
+    return [s.strip().strip("'\"")          # 바깥 ', " 제거
+            for s in raw.split(",")
+            if s.strip()]
+
+# ────────────────────────────── 페이지 설정
+st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
+
+# ────────────────────────────── 고정 TOP Bar
+top   = st.container()
+col_btn, _ = top.columns([1, 9], gap="small")   # _ : unused spacer
+
+st.markdown(
+    """
+    <style>
+    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button{
+        position:sticky;top:6px;z-index:998;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ────────────────────────────── 설정 JSON
+with open("config.json", encoding="utf-8")     as f:
+    menu_cfg = json.load(f)
+with open("publishers.json", encoding="utf-8") as f:
+    pub_cfg  = json.load(f)
+
+# ────────────────────────────── CSV 로딩
+CSV_PATHS = [Path(p) for p in
+             ("concepts.csv", "problems.csv", "self_check.csv", "exam_tips.csv")]
+
+@st.cache_data(show_spinner="📂 CSV 로딩 중…",
+               hash_funcs={Path: lambda p: p.stat().st_mtime})
+def load_csvs() -> dict[str, pd.DataFrame]:
+    c, p, s = [pd.read_csv(p) for p in CSV_PATHS[:3]]
+
+    tips = []
+    with CSV_PATHS[3].open(encoding="utf-8") as f:
+        r = csv.reader(f); next(r, None)
+        for row in r:
+            tips.append({"unit_id": row[0], "tip": ",".join(row[1:])})
+    t = pd.DataFrame(tips)
+    return {"concepts": c, "problems": p, "selfcheck": s, "tips": t}
+
+dfs = load_csvs()
+
+# ────────────────────────────── content dict
+def build_content(d: dict[str, pd.DataFrame]) -> dict:
+    c = {}
+    for uid, g in d["concepts"].groupby("unit_id"):
+        c[uid] = {"concept": g["concept"].iloc[0]}
+    for uid, field in (("problems", "problems"),
+                       ("selfcheck", "self_check")):
+        for u, g in d[uid].groupby("unit_id"):
+            c.setdefault(u, {})[field] = g.to_dict("records")
+    for uid, g in d["tips"].groupby("unit_id"):
+        c.setdefault(uid, {})["exam_tips"] = g["tip"].tolist()
+    return c
+
+content = build_content(dfs)
+
+# ────────────────────────────── RAG + LLM
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
+from transformers import (pipeline, AutoTokenizer,
+                          AutoModelForCausalLM, AutoModelForSeq2SeqLM)
+from langchain_community.llms import HuggingFacePipeline
+from langchain.chains import ConversationalRetrievalChain
 
+@st.cache_resource(show_spinner="🧠 모델·인덱스 초기화…")
+def init_rag_chain():
+    emb      = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L3-v2")
+    idx_path = Path("rag_index")
 
-# — 0) 설정 로드 —
-with open("config.json", "r", encoding="utf-8") as f:
-    menu_cfg = json.load(f)
-with open("publishers.json", "r", encoding="utf-8") as f:
-    pub_cfg = json.load(f)
+    if idx_path.exists():
+        store = FAISS.load_local(idx_path, emb, allow_dangerous_deserialization=True)
+    else:
+        if not Path("chunks.csv").exists():
+            st.error("❗ chunks.csv 가 없습니다. RAG 인덱스를 만들 수 없습니다.")
+            st.stop()
+        chunks_df = pd.read_csv("chunks.csv")
+        store     = FAISS.from_texts(chunks_df["chunk"].tolist(), emb)
+        store.save_local(idx_path)
 
-# — 1) CSV → content 사전 생성 —
+    MODEL_ID = ("google/flan-t5-small"
+                if os.getenv("USE_SMALL_LLM")
+                else "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
 
-# (1) concepts, problems, self_check는 기존대로
-concepts_df = pd.read_csv("concepts.csv")
-problems_df = pd.read_csv("problems.csv")
-self_df     = pd.read_csv("self_check.csv")
+    if "t5" in MODEL_ID:                       # seq‑to‑seq
+        tok  = AutoTokenizer.from_pretrained(MODEL_ID)
+        mdl  = AutoModelForSeq2SeqLM.from_pretrained(MODEL_ID)
+        task = "text2text-generation"
+    else:                                      # causal
+        tok  = AutoTokenizer.from_pretrained(MODEL_ID)
+        mdl  = AutoModelForCausalLM.from_pretrained(
+                  MODEL_ID, device_map="auto", torch_dtype="auto")
+        task = "text-generation"
 
-# (2) exam_tips.csv 수동 로드
-tips = []
-with open("exam_tips.csv", newline="", encoding="utf-8") as f:
-    reader = csv.reader(f)
-    next(reader)  # 헤더 건너뛰기
-    for row in reader:
-        unit_id  = row[0]
-        tip_text = ",".join(row[1:])
-        tips.append({"unit_id": unit_id, "tip": tip_text})
-tips_df = pd.DataFrame(tips)
+    llm_pipe = pipeline(task, model=mdl, tokenizer=tok,
+                        max_new_tokens=96, temperature=0.6)
+    llm      = HuggingFacePipeline(pipeline=llm_pipe)
 
-# (3) content 사전 초기화
-content = {}
-for uid, grp in concepts_df.groupby("unit_id"):
-    content[uid] = {"concept": grp["concept"].iloc[0]}
-for uid, grp in problems_df.groupby("unit_id"):
-    content.setdefault(uid, {})["problems"] = grp.to_dict(orient="records")
-for uid, grp in self_df.groupby("unit_id"):
-    content.setdefault(uid, {})["self_check"] = grp.to_dict(orient="records")
-for uid, grp in tips_df.groupby("unit_id"):
-    content.setdefault(uid, {})["exam_tips"] = grp["tip"].tolist()
+    return ConversationalRetrievalChain.from_llm(
+        llm=llm, retriever=store.as_retriever(search_kwargs={"k": 3})
+    )
 
-print("✅ content dict 생성 완료:", len(content), "개 단원")
+rag_chain = init_rag_chain()
 
-# 1-3) content 딕셔너리 조합
-content = {}
-for uid, grp in concepts_df.groupby("unit_id"):
-    content[uid] = {"concept": grp["concept"].iloc[0]}
-for uid, grp in problems_df.groupby("unit_id"):
-    content.setdefault(uid, {})["problems"] = grp.to_dict(orient="records")
-for uid, grp in self_df.groupby("unit_id"):
-    content.setdefault(uid, {})["self_check"] = grp.to_dict(orient="records")
-for uid, grp in tips_df.groupby("unit_id"):
-    content.setdefault(uid, {})["exam_tips"] = grp["tip"].tolist()
+# ────────────────────────────── SerpAPI
+from dotenv import load_dotenv
+load_dotenv()                 # .env → 환경변수 등록
 
-# — 2) SerpAPI (웹 검색) 설정 —
-API_KEY = "YOUR_SERPAPI_API_KEY"
-def web_search(query):
-    return GoogleSearch({"engine":"google","q":query,"api_key":API_KEY}) \
-           .get_dict().get("organic_results", [])
-
-# — 3) RAG 체인 초기화 —
-# chunks.csv 로드
-chunks_df = pd.read_csv("chunks.csv")  # columns: chunk, source
-
-# 임베딩 + FAISS 인덱스 생성
-emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-rag_store = FAISS.from_texts(chunks_df["chunk"].tolist(), emb)
-rag_store.save_local("rag_index")
-
-print("✅ RAG 인덱스 생성 완료")
-
-# TinyLlama 모델 파이프라인 래핑
-gen_pipe = pipeline(
-    "text-generation",
-    model="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-    tokenizer="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-    max_new_tokens=128,
-    temperature=0.7
-)
-llm_rag = HuggingFacePipeline(pipeline=gen_pipe)
-
-rag_chain = ConversationalRetrievalChain.from_llm(
-    llm=llm_rag,
-    retriever=rag_store.as_retriever(search_kwargs={"k":3})
-)
-
-# — 4) Streamlit UI 시작 —
-st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
-st.title("🧑‍🎓 나인스터디 챗봇")
-st.write("나인이에게 ‘스터디위드미? 스윗미!’ 해 보세요 😊")
-
-mode = st.radio("원하시는 서비스를 선택하세요",
-                ["레벨테스트 받기","학습 및 질문하기"])
-if mode == "레벨테스트 받기":
-    st.info("레벨테스트 기능은 준비 중입니다.")
-    st.stop()
-
-# — 5) 학습 및 질문하기 분기 로직 —
-path = ["학습 및 질문하기"]
-def step(opts, label):
-    choice = st.selectbox(label, list(opts.keys()))
-    path.append(choice)
-    return opts[choice]
-
-opts1 = menu_cfg["학습 및 질문하기"]
-opts2 = step(opts1, "대상 선택")      # 중학교·고등학교·…
-opts3 = step(opts2, "세부 선택")      # 중1·중2·… or 전형
-if isinstance(opts3, dict) and "분류" in opts3:
-    cat = st.selectbox("분류 선택", opts3["분류"])
-    path.append(cat)
-    pubs = pub_cfg[path[-2]][cat]
-    pub = st.selectbox("교재 선택", list(pubs.keys()))
-    path.append(pub)
-    unit = st.selectbox("과 선택", pubs[pub])
-    path.append(unit)
+SERP_KEY = os.getenv("SERPAPI_KEY", "")
+if SERP_KEY:
+    from serpapi import GoogleSearch
+    # ① 순수 호출 함수 (캐싱 X)
+    def _raw_search(q: str):
+        return (
+            GoogleSearch(
+                {
+                    "engine": "google",
+                    "q":      q,
+                    "api_key": SERP_KEY,
+                    "num":    2    # ← 결과 2개만
+                }
+            )
+            .get_dict()
+            .get("organic_results", [])
+        )
+    # ② 1시간 캐싱 래퍼
+    @st.cache_data(ttl=3600, show_spinner="🔍 검색 중…")
+    def web_search(q: str):
+        return _raw_search(q)
 else:
-    unit = path[-1]
+    web_search = lambda q: []
 
-# — 6) 콘텐츠 화면 & 하이브리드 QA —
-uid = unit.replace(" ", "_")
-data = content.get(uid, {})
+# ────────────────────────────── Stage 머신
+if "stage" not in st.session_state:
+    st.session_state.stage = 0               # 0 서비스 · 1 네비 · 2 학습
+if "nav" not in st.session_state:
+    st.session_state.nav = {}
 
-st.header(f"🔖 {unit}")
-st.write("---")
+# ↩️ Home 버튼 (콜백에서 rerun 제거)
+def reset_app():
+    st.session_state.stage = 0
+    st.session_state.nav.clear()
 
-# 6-1) 개념 설명 + 하이브리드 질문
-if st.button("1️⃣ 개념을 자세히 설명해줘요"):
-    st.markdown(data.get("concept", "준비 중입니다."))
-    st.write("---")
-    st.write("❓ 질문 유형을 선택하세요:")
-    mode2 = st.radio("", ["교재 범위 질문", "심화 질문(웹 검색)"], horizontal=True)
-    q = st.text_input("질문 입력", key="hybrid_q")
-    if q:
-        if mode2 == "교재 범위 질문":
-            res = rag_chain({"question": q, "chat_history": []})
-            st.markdown(res["answer"])
-        else:
-            results = web_search(q)[:3]
-            for r in results:
-                st.markdown(f"**{r['title']}**\n{r['snippet']}\n[{r['link']}]")
-    st.write("---")
+with col_btn:
+    st.button("↩️ 처음", on_click=reset_app, use_container_width=True)
 
-# 6-2) 문제 풀기
-if st.button("2️⃣ 해당 단원 문제를 풀고 싶어요"):
-    for p in data.get("problems", []):
-        ans = st.radio(p["question"], eval(p["choices"]), key=p["q_id"])
-        if st.button("제출", key=p["q_id"]):
-            st.success("✔ 정답!" if ans == p["answer"] else "❌ 오답!")
-    st.write("---")
+###############################################################################
+#  STAGE 0 ─ 서비스 선택
+###############################################################################
+if st.session_state.stage == 0:
+    st.title("🧑‍🎓 나인스터디 챗봇")
+    svc = st.radio("서비스 선택",
+                   ["레벨테스트 받기", "학습 및 질문하기"],
+                   key="svc_choice", horizontal=True)
+    if svc == "레벨테스트 받기":
+        st.info("🚧 레벨테스트 기능은 준비 중입니다.")
+    if st.button("다음 ▶", use_container_width=True):
+        if svc == "학습 및 질문하기":
+            st.session_state.stage = 1
+        st.session_state.pop("svc_choice", None)
+        st.rerun()
 
-# 6-3) 내 실력 체크하기
-if st.button("3️⃣ 내 실력을 체크하고 싶어요"):
-    for sc in data.get("self_check", []):
-        resp = st.text_input(sc["question"], key=sc["question"])
-        if st.button("확인", key=sc["question"] + "_chk"):
-            st.write("정답:", sc["answer"])
-    st.write("---")
+###############################################################################
+#  STAGE 1 ─ 네비게이션
+###############################################################################
+if st.session_state.stage == 1:
+    nav = st.session_state.nav
 
-# 6-4) 시험 포인트
-if st.button("4️⃣ 시험에 나올 포인트 알려줘요"):
-    for tip in data.get("exam_tips", []):
-        st.write("•", tip)
-    st.write("---")
+    # 1) 대상
+    if "target" not in nav:
+        nav["target"] = st.selectbox(
+            "대상 선택", list(menu_cfg["학습 및 질문하기"].keys()))
+        st.stop()
 
-# — 7) 추천 공유하기 —
-if st.button("🔗 추천 공유하기"):
-    st.success("https://n9study.example.com  를 친구에게 공유하세요!")
+    # 2) 세부
+    tgt_cfg = menu_cfg["학습 및 질문하기"][nav["target"]]
+    if "detail" not in nav:
+        nav["detail"] = st.selectbox("세부 선택", list(tgt_cfg.keys()))
+        st.stop()
+
+    # 3) (옵션) 분류
+    detail_cfg = tgt_cfg[nav["detail"]]
+    if "cat" not in nav and "분류" in detail_cfg:
+        nav["cat"] = st.selectbox("분류 선택", detail_cfg["분류"])
+        st.stop()
+
+    # 4) 교재
+    pubs = (pub_cfg.get(nav["detail"], {})
+                     .get(nav.get("cat", ""), {}))
+    if not pubs:
+        st.error("📚 교재 정보가 없습니다."); st.stop()
+
+    if "pub" not in nav:
+        nav["pub"] = st.selectbox("교재 선택", list(pubs.keys()))
+        st.stop()
+
+    # 5) 단원
+    units = pubs.get(nav["pub"], [])
+    if not units:
+        st.error("📑 단원 목록이 없습니다."); st.stop()
+
+    nav["unit"] = st.selectbox("과 선택", units)
+
+    if st.button("학습 화면으로 ▶", use_container_width=True):
+        st.session_state.stage = 2
+        st.rerun()
+
+###############################################################################
+#  STAGE 2 ─ 단원 학습
+###############################################################################
+# ───── Stage 2 ─ 단원 학습 화면 ─────
+if st.session_state.stage == 2:
+    nav = st.session_state.nav
+    uid = nav["unit"].replace(" ", "_")
+    data = content.get(uid, {})
+
+    st.header(f"📑 {nav['unit']}")
+    st.divider()
+
+    # ---------- 1️⃣ 개념 설명 ----------
+    # ❶ 클릭 시 세션 플래그 ON
+    def open_concept():
+        st.session_state.concept_open = True
+
+    st.button("1️⃣ 개념 설명", key="btn_concept",
+              on_click=open_concept, use_container_width=True)
+
+    # ❷ 플래그가 켜져 있으면 항상 표시
+    if st.session_state.get("concept_open"):
+        st.markdown(data.get("concept", "준비 중입니다."))
+        q = st.text_input("추가 질문 :", key="concept_q")
+        if q:
+            if st.toggle("웹 심화 질문으로 전환", False, key="tg_web"):
+                for r in web_search(q):
+                    st.write("🔗", r["title"], "→", r["link"])
+                    st.caption(r["snippet"])
+            else:
+                try:
+                    ans = rag_chain({"question": q, "chat_history": []})["answer"]
+                    st.write(ans)
+                except Exception as e:
+                    st.error("질문 처리 실패"); logging.error(e, exc_info=True)
+        st.divider()
+
+    # 2️⃣ 단원 문제
+    if st.button("2️⃣ 단원 문제", use_container_width=True):
+        for p in data.get("problems", []):
+            key = f"{uid}_{p['q_id']}"
+            ans = st.radio(p["question"], parse_choices(p["choices"]), key=key)
+            if st.button("제출", key=f"chk_{key}"):
+                st.success("✅ 정답!" if ans == p["answer"] else "❌ 오답")
+        st.divider()
+
+    # 3️⃣ 셀프 체크
+    if st.button("3️⃣ 셀프 체크", use_container_width=True):
+        for s in data.get("self_check", []):
+            r = st.text_input(s["question"], key=s["question"])
+            if st.button("정답 확인", key=f"self_{s['question']}"):
+                st.write("정답:", s["answer"])
+        st.divider()
+
+    # 4️⃣ 시험 포인트
+    if st.button("4️⃣ 시험 포인트", use_container_width=True):
+        for t in data.get("exam_tips", []):
+            st.write("•", t)
+        st.divider()
+
+    # 🔗 공유
+    if st.button("🔗 추천 링크 복사", use_container_width=True):
+        st.success("https://n9study.example.com 를 복사해 친구에게 보내세요!")
