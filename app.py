@@ -43,18 +43,37 @@ st.markdown("""
 with open("config.json", encoding="utf-8") as f: menu_cfg = json.load(f)
 with open("publishers.json", encoding="utf-8") as f: pub_cfg = json.load(f)
 
-CSV_PATHS = [Path(p) for p in
-             ("concepts.csv", "problems.csv", "self_check.csv", "exam_tips.csv")]
-@st.cache_data(show_spinner="📂 CSV 로딩 중…",
+# CSV 파일 경로 리스트
+CSV_PATHS = ["concepts.csv", "problems.csv", "self_check.csv", "exam_tips.csv"]
+
+@st.cache_data(show_spinner="📂 CSV 로딩 중…",
                hash_funcs={Path: lambda p: p.stat().st_mtime})
 def load_csvs():
-    c, p, s = [pd.read_csv(p) for p in CSV_PATHS[:3]]
-    tips_rows=[]
-    with CSV_PATHS[3].open(encoding="utf-8") as f:
-        r=csv.reader(f); next(r, None)
-        for row in r: tips_rows.append({"unit_id":row[0],"tip":",".join(row[1:])})
-    t=pd.DataFrame(tips_rows)
-    return {"concepts":c,"problems":p,"selfcheck":s,"tips":t}
+    # ── app.py가 위치한 'nine-study-chatbot' 폴더 절대 경로
+    base_dir = Path(__file__).parent  # :contentReference[oaicite:0]{index=0}
+
+    # 첫 세 개 CSV 읽기
+    df_concepts    = pd.read_csv(base_dir / CSV_PATHS[0])
+    df_problems    = pd.read_csv(base_dir / CSV_PATHS[1])
+    df_self_check  = pd.read_csv(base_dir / CSV_PATHS[2])
+
+    # exam_tips.csv 읽어서 DataFrame 생성
+    tips_rows = []
+    with (base_dir / CSV_PATHS[3]).open(encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader, None)
+        for row in reader:
+            tips_rows.append({"unit_id": row[0], "tip": ",".join(row[1:])})
+    df_tips = pd.DataFrame(tips_rows)
+
+    return {
+        "concepts":   df_concepts,
+        "problems":   df_problems,
+        "selfcheck":  df_self_check,
+        "tips":       df_tips
+    }
+
+# 실제 로딩
 dfs = load_csvs()
 
 def build_content(d):
