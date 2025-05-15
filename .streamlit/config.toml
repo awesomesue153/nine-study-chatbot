@@ -1,0 +1,4 @@
+[client]
+# 버전 1.31 이상
+showToolbar = false      
+showErrorDetails = false

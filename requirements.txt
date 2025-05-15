@@ -1,0 +1,16 @@
+streamlit>=1.31
+pandas
+sentencepiece
+accelerate
+einops
+transformers==4.41.1
+sentence_transformers==2.7.0
+langchain-community>=0.3.23
+langchain-huggingface==0.1.2
+faiss-cpu
+google-search-results
+python-dotenv
+fpdf2>=2.7
+matplotlib>=3.8
+
+
