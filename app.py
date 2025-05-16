@@ -1,6 +1,17 @@
 ###############################################################################
 #  NineStudy Chatbot  ▪︎  v 0.9.0   (2025-05-17)
+#
+#  ► 변경 핵심
+#    • LLM  : OpenAI ↔ TinyLlama 안전 폴백 + 상세 로그
+#    • UX   : StreamHandler 스트리밍 적용(Cloud-체감 ↑)
+#    • Style: footer / Toolbar / Fullscreen 버튼 CSS 숨김
+#    • Secure: secrets.get() KeyError 방지 · secrets.toml Git 제외
+#    • Refactor: ROOT_DIR 경로 통일 · reset_state 단순화
+#    • Bugfix: 레벨테스트 choice None 제출 방지 외
+#
+#  © 2025 Chapter9 — Creative Flow Labs
 ###############################################################################
+
 import os, json, csv, logging, uuid
 from pathlib import Path
 import streamlit as st
@@ -39,14 +50,21 @@ def parse_choices(raw: str) -> list[str]:
 
 # ───────────────────────── 페이지 & 상단 Bar
 st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
+# 페이지 설정 바로 아래쪽 (한 번만)
 st.markdown("""
 <style>
-footer, #MainMenu {visibility:hidden;}
-div[data-testid="stFullscreenButton"],
-.stViewFullscreenButton {display:none;}
-div[data-testid="stHorizontalBlock"] > div:nth-child(1) button{
-        position:sticky;top:6px;z-index:998;}
-h2 {font-size:28px !important;}
+/* ───── Footer “Built with Streamlit”  ───── */
+footer,
+footer * {visibility:hidden !important; height:0 !important;}
+
+/* ───── 우상단 3점 메뉴 & 풀스크린 ───── */
+button[title="View fullscreen"],
+button[title="View fullscreen"] + div,
+div[data-testid="StyledFullScreenButton"],
+#MainMenu {display:none !important;}
+
+/* (여백 줄이기) */
+html, body, [data-testid="stAppViewContainer"] > header {padding:0;}
 </style>
 """, unsafe_allow_html=True)
 
