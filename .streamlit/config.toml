@@ -1,4 +1,4 @@
-[client]
-# 버전 1.31 이상
-showToolbar = false      
-showErrorDetails = false
+[ui]
+# 1.32+ 옵션
+hideFooter = true
+hideToolbar = true
