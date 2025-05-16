@@ -53,15 +53,14 @@ st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
 # 페이지 설정 바로 아래쪽 (한 번만)
 st.markdown("""
 <style>
-/* ───── Footer “Built with Streamlit”  ───── */
-footer,
-footer * {visibility:hidden !important; height:0 !important;}
+/* ───── Streamlit footer badge & link ───── */
+[class^="viewerBadge_container__"],
+[class*=" viewerBadge_container__"] {display:none !important;}
 
-/* ───── 우상단 3점 메뉴 & 풀스크린 ───── */
+/* ───── Fullscreen button (new & old) ───── */
+[data-testid="stFullscreenButton"],
 button[title="View fullscreen"],
-button[title="View fullscreen"] + div,
-div[data-testid="StyledFullScreenButton"],
-#MainMenu {display:none !important;}
+.stViewFullscreenButton {display:none !important;}
 
 /* (여백 줄이기) */
 html, body, [data-testid="stAppViewContainer"] > header {padding:0;}
