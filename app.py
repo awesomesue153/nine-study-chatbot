@@ -1,41 +1,30 @@
 ###############################################################################
-#  NineStudy Chatbot  ▪︎  v 0.8.0   (2025‑05‑13)
-#
-#  ► 변경 핵심
-#    • NEW  레벨테스트 분기(Stage 9, 99) 추가
-#          – Adaptive‑Lite 엔진(20 문항·난이도 자동 조절)
-#          – 결과 PDF 다운로드 / SQLite 저장
-#    • NEW  세션 상태: lt, lt_block, lt_idx, user_id
-#    • NEW  의존성: fpdf2 · matplotlib  (requirements.txt 반영)
-#    • NEW  외부 모듈  leveltest.py  로 엔진 / PDF / DB 분리
-#
-#  ► 폴더/파일
-#      leveltest_questions.csv     (25 문항 샘플)
-#      leveltest.py                (레벨테스트 로직 전담)
-#
-#  ► 사용 방법
-#      - 서비스 선택 → “레벨테스트 받기” 클릭
-#      - 20 문항 완료 → 레벨·섹션 점수·PDF 리포트 확인
-#
-#  © 2025  Chapter9 — Creative Flow Labs
+#  NineStudy Chatbot  ▪︎  v 0.9.0   (2025-05-17)
 ###############################################################################
-
-import os, json, csv, logging
-from leveltest import LevelEngine, ITEMS as LT_ITEMS, make_pdf, save_result
+import os, json, csv, logging, uuid
 from pathlib import Path
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv; load_dotenv()
-import uuid, io
+from leveltest import LevelEngine, ITEMS as LT_ITEMS, make_pdf, save_result
 
-ROOT_DIR = Path(__file__).resolve().parent   # ★ 절대경로 상수
+# ───────────────────────── 상수 · 토큰 주입
+ROOT_DIR = Path(__file__).resolve().parent
 
-# Hugging Face 토큰 등록 (Streamlit Secret)
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
+HF_TOKEN = st.secrets.get("HUGGINGFACEHUB_API_TOKEN")
+if HF_TOKEN:
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = HF_TOKEN
 
-logging.basicConfig(level=logging.WARN)
+OPENAI_KEY = st.secrets.get("OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+if OPENAI_KEY:
+    os.environ["OPENAI_API_KEY"] = OPENAI_KEY
 
-# ───────────────────────── utils
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s | %(name)s | %(message)s"
+)
+
+# ───────────────────────── 유틸
 def parse_choices(raw: str) -> list[str]:
     raw = raw.strip()
     try:
@@ -48,41 +37,42 @@ def parse_choices(raw: str) -> list[str]:
         raw = raw[1:-1]
     return [s.strip().strip("'\"") for s in raw.split(",") if s.strip()]
 
-# ───────────────────────── 페이지 & TOP Bar
+# ───────────────────────── 페이지 & 상단 Bar
 st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
+st.markdown("""
+<style>
+footer, #MainMenu {visibility:hidden;}
+div[data-testid="stFullscreenButton"],
+.stViewFullscreenButton {display:none;}
+div[data-testid="stHorizontalBlock"] > div:nth-child(1) button{
+        position:sticky;top:6px;z-index:998;}
+h2 {font-size:28px !important;}
+</style>
+""", unsafe_allow_html=True)
+
 top = st.container()
 col_btn, _ = top.columns([1, 9], gap="small")
-st.markdown("""
-    <style>
-    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button{
-        position:sticky;top:6px;z-index:998;}
-    h2 {font-size:28px !important;}   /* 단원 타이틀 28 px 공통 적용 */
-    </style>""", unsafe_allow_html=True)
 
 # ───────────────────────── 설정(JSON) · CSV
-with open("config.json", encoding="utf-8") as f: menu_cfg = json.load(f)
-with open("publishers.json", encoding="utf-8") as f: pub_cfg = json.load(f)
+with open(ROOT_DIR / "config.json", encoding="utf-8") as f:
+    menu_cfg = json.load(f)
+with open(ROOT_DIR / "publishers.json", encoding="utf-8") as f:
+    pub_cfg = json.load(f)
 
-# CSV 파일 경로 리스트
 CSV_PATHS = ["concepts.csv", "problems.csv", "self_check.csv", "exam_tips.csv"]
 
 @st.cache_data(show_spinner="📂 CSV 로딩 중…",
                hash_funcs={Path: lambda p: p.stat().st_mtime})
 def load_csvs():
-    # ── app.py가 위치한 'nine-study-chatbot' 폴더 절대 경로
-    base_dir = Path(__file__).parent  # :contentReference[oaicite:0]{index=0}
-
-    # 첫 세 개 CSV 읽기
+    base_dir = ROOT_DIR
     df_concepts    = pd.read_csv(base_dir / CSV_PATHS[0])
     df_problems    = pd.read_csv(base_dir / CSV_PATHS[1])
     df_self_check  = pd.read_csv(base_dir / CSV_PATHS[2])
 
-    # exam_tips.csv 읽어서 DataFrame 생성
     tips_rows = []
     with (base_dir / CSV_PATHS[3]).open(encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader, None)
-        for row in reader:
+        for i, row in enumerate(csv.reader(f)):
+            if i == 0: continue
             tips_rows.append({"unit_id": row[0], "tip": ",".join(row[1:])})
     df_tips = pd.DataFrame(tips_rows)
 
@@ -93,16 +83,14 @@ def load_csvs():
         "tips":       df_tips
     }
 
-# 실제 로딩
 dfs = load_csvs()
 
 def build_content(d):
     c={}
     for uid,g in d["concepts"].groupby("unit_id"):
         c[uid]={"concept":g["concept"].iloc[0]}
-    for src,field in (("problems","problems"),):
-        for uid,g in d[src].groupby("unit_id"):
-            c.setdefault(uid,{})[field]=g.to_dict("records")
+    for uid,g in d["problems"].groupby("unit_id"):
+        c.setdefault(uid,{})["problems"]=g.to_dict("records")
     for uid,g in d["tips"].groupby("unit_id"):
         c.setdefault(uid,{})["exam_tips"]=g["tip"].tolist()
     return c
@@ -111,68 +99,52 @@ content = build_content(dfs)
 # ───────────────────────── RAG + LLM
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM
+from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
-from langchain.chat_models import ChatOpenAI   # ← 추가
-from langchain.callbacks.base import BaseCallbackHandler   # ← 새 import
+from langchain.callbacks.base import BaseCallbackHandler
 from importlib import util
 
-# ── OpenAI 키 · SDK 유효성 체크 ───────────────────────────────────────────
-OPENAI_KEY = (
-    st.secrets.get("OPENAI_API_KEY")        # secrets.toml / Cloud Secrets
-    or os.getenv("OPENAI_API_KEY")          # 컨테이너 ENV
-)
-HAS_SDK = bool(util.find_spec("openai"))    # 패키지 설치 여부
-USE_OPENAI = bool(OPENAI_KEY and HAS_SDK)   # 두 조건 모두 충족해야 사용
+HAS_SDK = bool(util.find_spec("openai"))
+USE_OPENAI = bool(OPENAI_KEY and HAS_SDK)
 
-
-# 수정된 프롬프트 (질문-컨텍스트-응답 구조)
 custom_prompt = PromptTemplate(
     input_variables=["context", "question"],
-    template="""{context}"""
+    template="{context}"
 )
 
 @st.cache_resource(show_spinner="🧠 모델 & 인덱스 로딩…")
 def init_rag_chain():
-    # 1) 임베딩 · 벡터스토어
     emb   = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-MiniLM-L3-v2")
     store = FAISS.load_local(str(ROOT_DIR / "rag_index"), emb,
                              allow_dangerous_deserialization=True)
 
-    llm = None   # ← 먼저 초기화해 두어 안전장치
-
-    # 2) OpenAI 시도
+    llm = None
     if USE_OPENAI:
         try:
             from langchain.chat_models import ChatOpenAI
             llm = ChatOpenAI(
                 model_name="gpt-3.5-turbo",
                 openai_api_key=OPENAI_KEY,
-                streaming=True,
-                temperature=0.7,
-                max_tokens=256,
-                timeout=15,
-                max_retries=2,
+                streaming=True, temperature=0.7, max_tokens=256,
+                timeout=15, max_retries=2,
             )
+            logging.info("💡 OpenAI LLM 사용(gpt-3.5-turbo)")
         except Exception as e:
-            logging.warning("⚠️ ChatOpenAI 로드 실패 → TinyLlama 폴백 (%s)", e)
+            logging.error("OpenAI 초기화 실패→폴백 (%s)", e, exc_info=True)
 
-    # 3) TinyLlama 폴백 (llm 이 아직 None 이면)
     if llm is None:
         MODEL_ID = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
         tok  = AutoTokenizer.from_pretrained(MODEL_ID)
         mdl  = AutoModelForCausalLM.from_pretrained(
                    MODEL_ID, device_map="auto", torch_dtype="auto")
-        pipe = pipeline(
-            "text-generation",
-            model=mdl, tokenizer=tok,
-            max_new_tokens=128, temperature=0.7, top_p=0.9,
-            repetition_penalty=1.2)
+        pipe = pipeline("text-generation", model=mdl, tokenizer=tok,
+                        max_new_tokens=128, temperature=0.7, top_p=0.9,
+                        repetition_penalty=1.2)
         llm = HuggingFacePipeline(pipeline=pipe)
+        logging.info("💡 TinyLlama LLM 사용")
 
-    # 4) RAG 체인
     chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=store.as_retriever(search_kwargs={"k": 3}),
@@ -180,20 +152,14 @@ def init_rag_chain():
     )
     return chain
 
-
 rag_chain = init_rag_chain()
 
-# ───────────────────────── SerpAPI (옵션)
-SERP_KEY=os.getenv("SERPAPI_KEY","")
-if SERP_KEY:
-    from serpapi import GoogleSearch
-    @st.cache_data(ttl=3600,show_spinner="🔍 검색 중…")
-    def web_search(q):
-        return (GoogleSearch({"engine":"google","q":q,
-                              "api_key":SERP_KEY,"num":2})
-                .get_dict().get("organic_results",[]))
-else:
-    web_search=lambda q:[]
+# ── 스트리밍 핸들러
+class StreamHandler(BaseCallbackHandler):
+    def __init__(self, box): self.box, self.txt = box, ""
+    def on_llm_new_token(self, t, **_):
+        self.txt += t
+        self.box.markdown(self.txt + "▌")
 
 # ───────────────────────── Stage & Session State
 if "stage"    not in st.session_state: st.session_state.stage = 0
