@@ -67,8 +67,6 @@ button[title="View fullscreen"],
 .stViewFullscreenButton {display:none !important;}
 
 /* 4) Streamlit 1.33+ 하단 배지 컨테이너 (예: _container_1upux_1) */
-div[class^="_container_"],
-div[class*=" _container_"] {display:none !important;},
 div._container_1upux_1 {display:none !important;}
 </style>
 """, unsafe_allow_html=True)

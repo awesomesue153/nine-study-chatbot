@@ -1,4 +1,4 @@
 [ui]
-hideToolbar = true       # 상단 ‘⋮’ 메뉴, 풀스크린
-hideFooter  = true       # 하단 배지
-viewerBadgeType = "none" # 1.33+: Built-with 배지 비활성
+hideToolbar = true 
+hideFooter  = true
+viewerBadgeType = "none"
