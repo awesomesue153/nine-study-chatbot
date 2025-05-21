@@ -53,12 +53,21 @@ def parse_choices(raw: str) -> list[str]:
 st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
 st.markdown("""
 <style>
+/* 기존 숨김 --------------------------- */
 footer, #MainMenu {visibility:hidden;}
 div[data-testid="stFullscreenButton"],
 .stViewFullscreenButton {display:none;}
-div[data-testid="stHorizontalBlock"] > div:nth-child(1) button{
-        position:sticky;top:6px;z-index:998;}
-h2 {font-size:28px !important;}
+/* …(나머지 이전 코드 그대로)…          */
+
+/* NEW — Streamlit 1.34+ selector 보강 -- */
+
+/* 1) 상단 Share 버튼·툴바 전체 숨김  */
+header[data-testid="stHeader"]      {visibility:hidden !important;}
+div[data-testid="stToolbarActions"] {display:none  !important;}
+
+/* 2) 하단 Manage app / Version 바지 */
+div[data-testid="stStatusWidget"]   {display:none  !important;}
+a[href*="manage.app"]               {display:none  !important;}
 </style>
 """, unsafe_allow_html=True)
 
