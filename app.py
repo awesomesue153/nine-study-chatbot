@@ -21,6 +21,7 @@ from leveltest import LevelEngine, ITEMS as LT_ITEMS, make_pdf, save_result
 
 # ───────────────────────── 상수 · 토큰 주입
 ROOT_DIR = Path(__file__).resolve().parent
+IMG_DIR  = ROOT_DIR / "images"           # ★ 이미지 전용 경로
 
 HF_TOKEN = st.secrets.get("HUGGINGFACEHUB_API_TOKEN")
 if HF_TOKEN:
@@ -50,24 +51,14 @@ def parse_choices(raw: str) -> list[str]:
 
 # ───────────────────────── 페이지 & 상단 Bar
 st.set_page_config(page_title="나인스터디 챗봇", layout="wide")
-# 페이지 설정 바로 아래쪽 (한 번만)
 st.markdown("""
 <style>
-/* 1)  viewerBadge_*  컨테이너 & 링크   */
-div[class^="viewerBadge_"],
-div[class*=" viewerBadge_"] {display:none !important;}
-
-/* 2)  data-testid 속성 (신규)          */
-div[data-testid="stViewerBadge"],
-footer[data-testid="stFooter"] {display:none !important;}
-
-/* 3)  Fullscreen 버튼 - 모든 버전 대비  */
-[data-testid="stFullscreenButton"],
-button[title="View fullscreen"],
-.stViewFullscreenButton {display:none !important;}
-
-/* 4) Streamlit 1.33+ 하단 배지 컨테이너 (예: _container_1upux_1) */
-div._container_1upux_1 {display:none !important;}
+footer, #MainMenu {visibility:hidden;}
+div[data-testid="stFullscreenButton"],
+.stViewFullscreenButton {display:none;}
+div[data-testid="stHorizontalBlock"] > div:nth-child(1) button{
+        position:sticky;top:6px;z-index:998;}
+h2 {font-size:28px !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -383,7 +374,7 @@ if st.session_state.stage == 9:
     idx   = st.session_state.lt_idx
     q     = block[idx]
 
-    st.progress(len(eng.history) / eng.MAX_Q)
+    st.progress(min(len(eng.history), eng.MAX_Q) / eng.MAX_Q)
     st.subheader(f"문항 {len(eng.history)+1} / {eng.MAX_Q}")
     st.markdown(q["question"])
 
@@ -409,33 +400,133 @@ if st.session_state.stage == 9:
         st.rerun()
 
 ###############################################################################
-#  STAGE 99 ─ 결과 & PDF
+#  STAGE 99 ─ 결과 & PDF  (트렌디 UI v2)
 ###############################################################################
 if st.session_state.stage == 99:
     eng = st.session_state.lt
-    # ── 점수 집계
+
+    # 1) 점수 집계 -----------------------------------------------------------
     sec_scores = {"vocab":0,"grammar":0,"writing":0,"reading":0}
     for q_id, correct, _ in eng.history:
         if correct:
             skill = next(i for i in LT_ITEMS if i["q_id"] == q_id)["skill"]
-            sec_scores[skill] += 4    # 25점/섹션 = 6문항→4점
-
+            sec_scores[skill] += 4
     total = sum(sec_scores.values())
-    level_map = [(14,"A1"),(34,"A2"),(54,"B1"),(74,"B2"),(89,"C1"),(100,"C2")]
-    level = next(l for t,l in level_map if total <= t)
+    level = next(l for t,l in [(14,"A1"),(34,"A2"),(54,"B1"),
+                               (74,"B2"),(89,"C1"),(100,"C2")] if total<=t)
 
-    st.success(f"당신의 레벨은 **{level}**입니다! (총점 {total}/100)")
-    st.write("섹션별 점수:", sec_scores)
+    # 2) 헤더 이미지 -----------------------------------------------------------
+    HEADER_IMG = IMG_DIR / "header_leveltest(2).png"
 
-    # ── PDF 리포트
-    result = dict(user_id = st.session_state.user_id,
-                  total_score = total,
-                  level_code = level,
-                  section_scores = sec_scores)
+    st.image(
+        str(HEADER_IMG),                     # Path → str 로 변환
+        caption="NineStudy Level Test Result",
+        use_container_width=True,
+    )
+
+
+    # 3) 레이아웃 (2:1)  -----------------------------------------------------
+    left, right = st.columns([2, 1], gap="large")
+
+    # ── 3-1  Altair 형광 막대 + 점수 레이블 ---------------------------
+    import altair as alt, pandas as pd
+    df_chart = pd.DataFrame({
+        "section": list(sec_scores.keys()),
+        "score":   list(sec_scores.values()),
+    })
+
+    neon_palette = ["#5ABFA3", "#FF6F6C", "#F9F871", "#6DD9FF"]  # vocab→reading
+
+    base = alt.Chart(df_chart).encode(
+        x=alt.X("section:N", title=None, axis=alt.Axis(labelAngle=0)),
+        y=alt.Y("score:Q",   title=None, scale=alt.Scale(domain=[0, 25]))
+    )
+
+    bars = base.mark_bar(
+        cornerRadiusTopLeft=6, cornerRadiusTopRight=6
+    ).encode(
+        color=alt.Color("section:N",
+                        scale=alt.Scale(domain=list(sec_scores.keys()),
+                                        range=neon_palette),
+                        legend=None),
+        tooltip=["section", "score"],
+    )
+
+    labels = base.mark_text(
+        dy=-8,                         # 막대 위쪽 약간 띄우기
+        color="black",                 # 필요하면 'white' 로
+        fontSize=13,
+        fontWeight="bold"
+    ).encode(
+        text="score:Q"
+    )
+
+    with left:
+        st.altair_chart((bars + labels), use_container_width=True)
+
+
+    # 3-2  Overview & Level 카드 -----------------------------------------------
+    with right:
+        st.markdown("#### 🏆 Overview")
+
+        neon = "#5ABFA3"          # 형광 그린 (그래프와 통일)
+
+        # ── 총점 커스텀 표시 ─────────────────────────────
+        st.markdown(
+            f"""
+            <div style='line-height:1; margin-bottom:8px'>
+                <span style='font-size:50px; font-weight:900; color:{neon};'>
+                    {total}
+                </span>
+                <span style='font-size:24px; font-weight:600;'> / 100</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.write("")                # Streamlit 빈 줄
+        st.write("")                # Streamlit 빈 줄
+        st.write("")                # Streamlit 빈 줄
+
+        # ── 레벨 커스텀 표시 ─────────────────────────────
+        st.markdown("#### 🏆 Level")
+        st.markdown(
+            f"""
+            <div style='line-height:1; margin-bottom:8px'>
+                <span style='font-size:50px; font-weight:900; color:{neon};'>
+                    {level}
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        weakest = min(sec_scores, key=sec_scores.get)
+        best    = max(sec_scores, key=sec_scores.get)
+        st.markdown(
+            f"<div style='margin-top:12px'>"
+            f"😍 Best : <b>{best.capitalize()}</b><br>"
+            f"😭 Weak : <b>{weakest.capitalize()}</b>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.divider()
+
+    # 4) PDF 리포트 + DB 저장 -------------------------------------------
+    result = dict(
+        user_id=st.session_state.user_id,
+        total_score=total,
+        level_code=level,
+        section_scores=sec_scores,
+    )
     pdf_bytes = make_pdf(result)
-    st.download_button("📄 PDF 리포트 다운로드", pdf_bytes,
-                       file_name="NineStudy_LevelReport.pdf")
-
-    # ── DB 저장
+    st.download_button(
+        "📄  PDF 리포트 다운로드",
+        pdf_bytes,
+        file_name="NineStudy_LevelReport.pdf",
+    )
     save_result(st.session_state.user_id, result)
 
+    # 5) 약점 보완 바로 가기 (선택) --------------------------------------
+    if st.button(f"💡  {weakest.capitalize()} 보완 학습 시작"):
+        st.session_state.stage = 1
+        st.rerun()

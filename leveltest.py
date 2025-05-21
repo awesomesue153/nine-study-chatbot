@@ -17,7 +17,6 @@
 #      종료 → make_pdf() → save_result()
 ###############################################################################
 
-
 import random, uuid, datetime, sqlite3, json, pandas as pd
 from pathlib import Path
 from fpdf import FPDF
