@@ -1,13 +1,15 @@
 ###############################################################################
-#  NineStudy Chatbot  ▪︎  v 0.9.0   (2025-05-17)
+#  NineStudy Chatbot  ▪︎  v 0.9.1   (2025-05-22)
 #
-#  ► 변경 핵심
-#    • LLM  : OpenAI ↔ TinyLlama 안전 폴백 + 상세 로그
-#    • UX   : StreamHandler 스트리밍 적용(Cloud-체감 ↑)
-#    • Style: footer / Toolbar / Fullscreen 버튼 CSS 숨김
-#    • Secure: secrets.get() KeyError 방지 · secrets.toml Git 제외
-#    • Refactor: ROOT_DIR 경로 통일 · reset_state 단순화
-#    • Bugfix: 레벨테스트 choice None 제출 방지 외
+#  ► 0.9.1 핵심
+#    • Result UI  : 네온 팔레트 막대그래프 + 점수 레이블 + 카드형 Overview/Level
+#    • Header Img : 3-D illustration (light-gray bg · neon-green highlights)
+#                   → images/header_leveltest_gray.png
+#    • Path       : IMG_DIR 상수 도입, 모든 자산 절대경로 관리
+#    • Style      : CSS·로직·의존성 변동 없음 (Altair 내장 활용)
+#
+#  ► 폴더
+#      images/header_leveltest_gray.png  (새 헤더)
 #
 #  © 2025 Chapter9 — Creative Flow Labs
 ###############################################################################
@@ -423,6 +425,25 @@ if st.session_state.stage == 99:
     total = sum(sec_scores.values())
     level = next(l for t,l in [(14,"A1"),(34,"A2"),(54,"B1"),
                                (74,"B2"),(89,"C1"),(100,"C2")] if total<=t)
+    
+    # ── ❶ 4-색 형광 그래프 BytesIO 생성 ─────────────────────────────
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    plt.clf()
+    cols = ["#5ABFA3", "#FF6F6C", "#F9F871", "#6DD9FF"]  # 형광 Green·Cyan·Yellow·Pink
+    labels = list(sec_scores.keys())
+    values = list(sec_scores.values())
+    fig, ax = plt.subplots(figsize=(4, 2.2))             # ← 크기 DOWN
+    bars = ax.bar(labels, values, color=cols, width=0.55)
+    ax.set_ylim(0, 25) ; ax.spines[['right','top']].set_visible(False)
+    ax.set_ylabel("점수")
+    # 점수 숫자 표시
+    for b, v in zip(bars, values):
+        ax.text(b.get_x()+b.get_width()/2, v+1, str(v), ha='center', va='bottom', fontsize=8)
+    buf = BytesIO() ; plt.tight_layout(pad=0.4)
+    plt.savefig(buf, format="png", dpi=140) ; buf.seek(0)
+    chart_img = buf.getvalue()            # ← PDF로 넘길 변수
+    plt.close(fig)
 
     # 2) 헤더 이미지 -----------------------------------------------------------
     HEADER_IMG = IMG_DIR / "header_leveltest(2).png"
@@ -527,7 +548,7 @@ if st.session_state.stage == 99:
         level_code=level,
         section_scores=sec_scores,
     )
-    pdf_bytes = make_pdf(result)
+    pdf_bytes = make_pdf(result, chart_img, HEADER_IMG)
     st.download_button(
         "📄  PDF 리포트 다운로드",
         pdf_bytes,
