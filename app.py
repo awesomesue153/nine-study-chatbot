@@ -1,15 +1,11 @@
 ###############################################################################
-#  NineStudy Chatbot  ▪︎  v 0.9.1   (2025-05-22)
+#  NineStudy Chatbot  ▪︎  v 1.1.0   (2025-06-03)
 #
-#  ► 0.9.1 핵심
-#    • Result UI  : 네온 팔레트 막대그래프 + 점수 레이블 + 카드형 Overview/Level
-#    • Header Img : 3-D illustration (light-gray bg · neon-green highlights)
-#                   → images/header_leveltest_gray.png
-#    • Path       : IMG_DIR 상수 도입, 모든 자산 절대경로 관리
-#    • Style      : CSS·로직·의존성 변동 없음 (Altair 내장 활용)
-#
-#  ► 폴더
-#      images/header_leveltest_gray.png  (새 헤더)
+#  ► 변경 핵심
+#    • Data : exam_tips.csv 를 표준 CSV 스키마(헤더+콤마)로 통일
+#    • Code : load_csvs() 단순화 → 4개 CSV 모두 pd.read_csv() 한 줄 처리
+#    • Bug  : 시험 포인트 탭 미노출 오류 수정
+#    • Docs : 릴리스 노트 / 헤더 주석 1.1.0 반영
 #
 #  © 2025 Chapter9 — Creative Flow Labs
 ###############################################################################
@@ -91,13 +87,7 @@ def load_csvs():
     df_concepts    = pd.read_csv(base_dir / CSV_PATHS[0])
     df_problems    = pd.read_csv(base_dir / CSV_PATHS[1])
     df_self_check  = pd.read_csv(base_dir / CSV_PATHS[2])
-
-    tips_rows = []
-    with (base_dir / CSV_PATHS[3]).open(encoding="utf-8") as f:
-        for i, row in enumerate(csv.reader(f)):
-            if i == 0: continue
-            tips_rows.append({"unit_id": row[0], "tip": ",".join(row[1:])})
-    df_tips = pd.DataFrame(tips_rows)
+    df_tips        = pd.read_csv(base_dir / CSV_PATHS[3])
 
     return {
         "concepts":   df_concepts,

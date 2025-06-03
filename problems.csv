@@ -1,51 +1,51 @@
-﻿unit_id,q_id,question,choices,answer
-1과_강조의_DO,1,"He ___ study hard for the exam.","['did','do','does']",did
-1과_강조의_DO,2,"I ___ clean the house yesterday.","['did','do','does']",did
-1과_강조의_DO,3,"You ___ do your best on the project.","['did','do','does']",do
-1과_강조의_DO,4,"She ___ understand the problem fully.","['did','do','does']",does
-1과_강조의_DO,5,"They ___ visit us more often in the past.","['did','do','does']",did
-1과_강조의_DO,6,"We ___ enjoy the concert last night.","['did','do','does']",did
-1과_강조의_DO,7,"He ___ speak Spanish when he was in Spain.","['did','do','does']",did
-1과_강조의_DO,8,"She ___ try her best on the test.","['did','do','does']",did
-1과_강조의_DO,9,"I ___ appreciate your help.","['did','do','does']",do
-1과_강조의_DO,10,"They ___ know the answer until they studied.","['did','do','does']",did
-1과_강조의_DO,11,"He ___ finish his homework before dinner.","['did','do','does']",did
-1과_강조의_DO,12,"We ___ have dinner early.","['did','do','does']",did
-1과_강조의_DO,13,"You ___ help me with this task.","['did','do','does']",do
-1과_강조의_DO,14,"I ___ love chocolate.","['did','do','does']",do
-1과_강조의_DO,15,"She ___ believe in ghosts.","['did','do','does']",does
-1과_강조의_DO,16,"He ___ own a car now.","['did','do','does']",does
-1과_강조의_DO,17,"They ___ get the report on time.","['did','do','does']",did
-1과_강조의_DO,18,"We ___ start the meeting at 9.","['did','do','does']",did
-1과_강조의_DO,19,"I ___ want to go to the park.","['did','do','does']",do
-1과_강조의_DO,20,"You ___ need to finish this by tomorrow.","['did','do','does']",do
-1과_강조의_DO,21,"She ___ read the instructions carefully.","['did','do','does']",did
-1과_강조의_DO,22,"He ___ answer all the questions correctly.","['did','do','does']",did
-1과_강조의_DO,23,"They ___ agree with the proposal.","['did','do','does']",do
-1과_강조의_DO,24,"I ___ support your decision.","['did','do','does']",do
-1과_강조의_DO,25,"We ___ prefer tea over coffee.","['did','do','does']",did
-1과_강조의_DO,26,"She ___ attend the meeting yesterday.","['did','do','does']",did
-1과_강조의_DO,27,"He ___ visit his grandparents every weekend.","['did','do','does']",does
-1과_강조의_DO,28,"They ___ finish the race despite the rain.","['did','do','does']",did
-1과_강조의_DO,29,"You ___ know the answer all along.","['did','do','does']",did
-1과_강조의_DO,30,"I ___ agree with your point.","['did','do','does']",do
-2과_가정법,1,"If I ___ you, I would take the job.","['am','were','was']",were
-2과_가정법,2,"If she had known the truth, she ___ have helped us.","['will','would','can']",would
-2과_가정법,3,"If it ___ tomorrow, we would stay home.","['rains','rain','rained']",rained
-2과_가정법,4,"If I ___ wings, I would fly to you.","['have','had','has']",had
-2과_가정법,5,"If they ___ harder, they would have won the game.","['practice','practiced','had practiced']",had practiced
-2과_가정법,6,"If he ___ enough money, he would buy a new car.","['has','had','have']",had
-2과_가정법,7,"If you ___ me yesterday, I would have told you the answer.","['ask','asked','had asked']",had asked
-2과_가정법,8,"If she ___ here, she would help us.","['is','was','were']",were
-2과_가정법,9,"If we ___ earlier, we would not have been late.","['leave','left','had left']",had left
-2과_가정법,10,"If I ___ a bird, I would fly high in the sky.","['am','were','was']",were
-2과_가정법,11,"If you ___ more careful, you wouldn't make mistakes.","['are','were','was']",were
-2과_가정법,12,"If Tom ___ the invitation, he would have come to the party.","['receives','received','had received']",had received
-2과_가정법,13,"If I ___ the answer, I would tell you.","['know','knew','knows']",knew
-2과_가정법,14,"If they ___ the bus, they would be here by now.","['caught','had caught','catch']",had caught
-2과_가정법,15,"If it ___ snow tomorrow, we would go skiing.","['will','would','should']",should
-2과_가정법,16,"If he ___ to the meeting, he would have met the manager.","['go','went','had gone']",had gone
-2과_가정법,17,"If I ___ rich, I would travel around the world.","['am','was','were']",were
-2과_가정법,18,"If she ___ harder, she could get better grades.","['studies','studied','study']",studied
-2과_가정법,19,"If you ___ me, I would be happy.","['help','helped','had helped']",helped
-2과_가정법,20,"If I ___ you, I would not do that.","['am','was','were']",were
+﻿grade_band,category,publisher,unit_id,q_id,question,choices,answer
+중3,내신,능률,01_강조의_DO,1,"He ___ study hard for the exam.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,2,"I ___ clean the house yesterday.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,3,"You ___ do your best on the project.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,4,"She ___ understand the problem fully.","[""did"",""do"",""does""]",does
+중3,내신,능률,01_강조의_DO,5,"They ___ visit us more often in the past.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,6,"We ___ enjoy the concert last night.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,7,"He ___ speak Spanish when he was in Spain.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,8,"She ___ try her best on the test.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,9,"I ___ appreciate your help.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,10,"They ___ know the answer until they studied.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,11,"He ___ finish his homework before dinner.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,12,"We ___ have dinner early.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,13,"You ___ help me with this task.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,14,"I ___ love chocolate.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,15,"She ___ believe in ghosts.","[""did"",""do"",""does""]",does
+중3,내신,능률,01_강조의_DO,16,"He ___ own a car now.","[""did"",""do"",""does""]",does
+중3,내신,능률,01_강조의_DO,17,"They ___ get the report on time.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,18,"We ___ start the meeting at 9.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,19,"I ___ want to go to the park.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,20,"You ___ need to finish this by tomorrow.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,21,"She ___ read the instructions carefully.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,22,"He ___ answer all the questions correctly.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,23,"They ___ agree with the proposal.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,24,"I ___ support your decision.","[""did"",""do"",""does""]",do
+중3,내신,능률,01_강조의_DO,25,"We ___ prefer tea over coffee.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,26,"She ___ attend the meeting yesterday.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,27,"He ___ visit his grandparents every weekend.","[""did"",""do"",""does""]",does
+중3,내신,능률,01_강조의_DO,28,"They ___ finish the race despite the rain.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,29,"You ___ know the answer all along.","[""did"",""do"",""does""]",did
+중3,내신,능률,01_강조의_DO,30,"I ___ agree with your point.","[""did"",""do"",""does""]",do
+중3,내신,능률,02_가정법,1,"If I ___ you, I would take the job.","[""am"",""were"",""was""]",were
+중3,내신,능률,02_가정법,2,"If she had known the truth, she ___ have helped us.","[""will"",""would"",""can""]",would
+중3,내신,능률,02_가정법,3,"If it ___ tomorrow, we would stay home.","[""rains"",""rain"",""rained""]",rained
+중3,내신,능률,02_가정법,4,"If I ___ wings, I would fly to you.","[""have"",""had"",""has""]",had
+중3,내신,능률,02_가정법,5,"If they ___ harder, they would have won the game.","[""practice"",""practiced"",""had practiced""]","had practiced"
+중3,내신,능률,02_가정법,6,"If he ___ enough money, he would buy a new car.","[""has"",""had"",""have""]",had
+중3,내신,능률,02_가정법,7,"If you ___ me yesterday, I would have told you the answer.","[""ask"",""asked"",""had asked""]","had asked"
+중3,내신,능률,02_가정법,8,"If she ___ here, she would help us.","[""is"",""was"",""were""]",were
+중3,내신,능률,02_가정법,9,"If we ___ earlier, we would not have been late.","[""leave"",""left"",""had left""]","had left"
+중3,내신,능률,02_가정법,10,"If I ___ a bird, I would fly high in the sky.","[""am"",""were"",""was""]",were
+중3,내신,능률,02_가정법,11,"If you ___ more careful, you wouldn't make mistakes.","[""are"",""were"",""was""]",were
+중3,내신,능률,02_가정법,12,"If Tom ___ the invitation, he would have come to the party.","[""receives"",""received"",""had received""]","had received"
+중3,내신,능률,02_가정법,13,"If I ___ the answer, I would tell you.","[""know"",""knew"",""knows""]",knew
+중3,내신,능률,02_가정법,14,"If they ___ the bus, they would be here by now.","[""caught"",""had caught"",""catch""]","had caught"
+중3,내신,능률,02_가정법,15,"If it ___ snow tomorrow, we would go skiing.","[""will"",""would"",""should""]",should
+중3,내신,능률,02_가정법,16,"If he ___ to the meeting, he would have met the manager.","[""go"",""went"",""had gone""]","had gone"
+중3,내신,능률,02_가정법,17,"If I ___ rich, I would travel around the world.","[""am"",""was"",""were""]",were
+중3,내신,능률,02_가정법,18,"If she ___ harder, she could get better grades.","[""studies"",""studied"",""study""]",studied
+중3,내신,능률,02_가정법,19,"If you ___ me, I would be happy.","[""help"",""helped"",""had helped""]",helped
+중3,내신,능률,02_가정법,20,"If I ___ you, I would not do that.","[""am"",""was"",""were""]",were

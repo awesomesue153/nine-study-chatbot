@@ -1,20 +1,16 @@
 ###############################################################################
-#  leveltest.py  ▪︎  v 0.8.0   (2025‑05‑13)
+#  leveltest.py  ▪︎  v 1.1.0   (2025-06-03)
+#
+#  ▪︎ 변경 사항
+#    - (공통) CSV 스키마 통일에 따른 주석 보완 (코드 변경 없음)
+#    - 문서 버전 표기 1.1.0 으로 갱신
 #
 #  ▪︎ 기능
-#    - LevelEngine : Adaptive‑Lite 난이도 조절(블록당 3문항, 최대 20문항)
-#    - PDF Report  : fpdf2 로 결과 요약서를 메모리 bytes 로 생성
-#    - SQLite Log  : test_results 테이블 자동 생성·저장
+#    - LevelEngine : Adaptive-Lite (3문항*최대 20) 난이도 조절
+#    - make_pdf    : 헤더·그래프·피드백 포함 결과 리포트(PDF) 생성
+#    - save_result : SQLite(test_results) 저장
 #
-#  ▪︎ 주요 상수
-#    CSV_FILE  = leveltest_questions.csv
-#    DB_FILE   = leveltest.db
-#    BLOCK     = 3     # 문항/블록
-#    MAX_Q     = 20    # 총 문항
-#
-#  ▪︎ 사용 흐름
-#      app.py(Stage 9) → LevelEngine.next_block() → record() → adjust_diff()
-#      종료 → make_pdf() → save_result()
+#  © 2025 Chapter9 — Creative Flow Labs
 ###############################################################################
 
 import random, uuid, datetime as dt, sqlite3, json, pandas as pd
